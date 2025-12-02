@@ -1,6 +1,19 @@
+# Environment & secrets
 .env
-venv
-data/raw
-__pycache__
-backend_venv
-src/backend/models
+
+# Python environments
+venv/
+backend_venv/
+
+# Python cache
+__pycache__/
+
+# Data
+data/raw/
+
+# Model files
+*.onnx
+
+# Images
+*.jpg
+*.jpeg
