@@ -1,0 +1,17 @@
+sqlalchemy
+python-dotenv
+asyncpg
+cloudinary
+insightface 
+onnxruntime 
+opencv-python-headless 
+numpy
+qdrant-client==1.12.2
+scipy
+onnx
+fastapi 
+uvicorn 
+python-multipart
+pydantic 
+mtcnn
+Pillow
