@@ -1,3 +1,4 @@
+# src/backend/app/schemas.py
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -22,3 +23,33 @@ class RegisterRequest(BaseModel):
     last_seen_time: str
     contact_info: str
     additional_details: str
+    height: Optional[str] = None
+    reporter: Optional[str] = None
+    reporter_contact: Optional[str] = None
+    aadhar_number: Optional[str] = None
+
+# Registration response (after submit)
+class RegistrationResponse(BaseModel):
+    registration_id: str
+    status: str
+
+# Admin side registration item
+class AdminRegistrationItem(BaseModel):
+    registration_id: str
+    person_data: dict
+    person_image_url: Optional[str] = None
+    aadhar_image_url: Optional[str] = None
+    submitted_at: Optional[str] = None
+
+class AdminRegistrationList(BaseModel):
+    pending: List[AdminRegistrationItem]
+
+class ApproveRegistrationResponse(BaseModel):
+    status: str
+    person_id: Optional[str] = None
+
+class AdminDashboardResponse(BaseModel):
+    total_persons: int
+    verified_persons: int
+    pending_registrations: int
+    recent_cases: List[dict]

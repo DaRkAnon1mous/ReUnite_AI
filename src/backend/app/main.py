@@ -1,3 +1,4 @@
+# src/backend/app/main.py
 from fastapi import FastAPI
 from .routers import search, register, admin
 from .services.db_service import create_tables
@@ -10,5 +11,4 @@ app.include_router(admin.router)
 
 @app.on_event("startup")
 async def startup_event():
-    # ensure tables exist
     await create_tables()

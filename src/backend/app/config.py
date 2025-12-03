@@ -18,3 +18,6 @@ TOP_K = int(os.getenv("TOP_K", "5"))
 # Model paths (relative to project root)
 BUFFALO_ONNX  = os.getenv("ARCFACE_ONNX", "src/backend/models/glintr100.onnx")
 SCRFD_ONNX = os.getenv("SCRFD_ONNX", "src/backend/models/SCRFD.onnx")  # optional
+
+CLERK_ISSUER = os.getenv("CLERK_ISSUER")  
+CLERK_AUD = os.getenv("CLERK_AUD")
