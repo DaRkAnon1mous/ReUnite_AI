@@ -51,7 +51,7 @@ async def admin_verify(registration_id: str, approve: bool = True, _=Depends(ver
         if not approve:
             await session.delete(reg)
             await session.commit()
-            invalidate_person_metadata()
+            # No person metadata cache to invalidate on rejection
             return {"status": "rejected"}
 
         pdata = json.loads(reg.person_data)
