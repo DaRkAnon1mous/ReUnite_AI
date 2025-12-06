@@ -2,6 +2,8 @@
 import uuid
 import json
 import requests
+import numpy as np
+import cv2
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from ..services.cloudinary_services import upload_image_fileobj
 from ..services.db_service import AsyncSessionLocal
@@ -9,6 +11,10 @@ from src.backend.db_files.models import Registration
 from ..pipeline import extract_embedding
 from ..schemas import RegisterRequest, RegistrationResponse
 from datetime import datetime
+from ..schemas import RegistrationResponse
+from ..cache.dashboard_cache import clear_dashboard_cache
+from ..cache.embedding_cache import set_cached_embedding
+from ..cache.search_cache import set_cached_search
 
 router = APIRouter()
 
@@ -29,7 +35,6 @@ async def register_person(
     image: UploadFile = File(...),
     aadhar_image: UploadFile = File(None),
 ):
-    # Validate minimal fields (Pydantic is used on client side; server double-checks)
     if not image:
         raise HTTPException(status_code=400, detail="Face image is required")
 
@@ -37,32 +42,28 @@ async def register_person(
     try:
         face_url = upload_image_fileobj(image.file)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cloudinary upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload face image: {e}")
 
     aadhar_url = None
     if aadhar_image:
         try:
             aadhar_url = upload_image_fileobj(aadhar_image.file)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Aadhar upload failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to upload Aadhar image: {e}")
 
-    # compute embedding (use pipeline)
-    # we need bytes -> np image; extract_embedding expects BGR numpy
-    import numpy as np
-    import cv2
+    # Extract embedding from face (cache-worthy)
     image.file.seek(0)
-    b = image.file.read()
-    nparr = np.frombuffer(b, np.uint8)
-    img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    embedding = extract_embedding(img_bgr)
-    # embedding may be None if detect failed
-    if embedding is None:
-        # still store registration, admin can manually verify image
-        embedding_flag = False
-    else:
-        embedding_flag = True
+    img_bytes = await image.read()
+    arr = np.frombuffer(img_bytes, np.uint8)
+    img_bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
-    # create registration DB entry
+    embedding = extract_embedding(img_bgr)
+    embedding_flag = embedding is not None
+
+    if embedding_flag:
+        set_cached_embedding(img_bytes, embedding)
+
+    # Create registration entry
     async with AsyncSessionLocal() as session:
         reg = Registration(
             person_data=json.dumps({
@@ -83,9 +84,13 @@ async def register_person(
             person_image_url=face_url,
             aadhar_image_url=aadhar_url,
             status="pending",
-            submitted_at=datetime.utcnow()
+            submitted_at=datetime.utcnow(),
         )
         session.add(reg)
         await session.commit()
         await session.refresh(reg)
-        return {"registration_id": str(reg.id), "status": reg.status}
+
+    # Invalidate admin dashboard (new pending registration)
+    clear_dashboard_cache()
+
+    return {"registration_id": str(reg.id), "status": reg.status}

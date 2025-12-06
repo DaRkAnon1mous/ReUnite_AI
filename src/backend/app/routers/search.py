@@ -7,65 +7,99 @@ from ..config import TOP_K, SIMILARITY_THRESHOLD
 from ..pipeline import extract_embedding
 import cv2
 import numpy as np
+from ..schemas import SearchResponse, MatchItem
+from ..cache.person_cache import get_person_metadata, cache_person_metadata
+from ..cache.embedding_cache import get_cached_embedding, set_cached_embedding
+from ..cache.search_cache import get_cached_search, set_cached_search
 from ..services.db_service import AsyncSessionLocal
 from src.backend.db_files.models import Person
 from sqlalchemy import select
 
 router = APIRouter()
 
-@router.post("/search")
+@router.post("/search", response_model=SearchResponse)
 async def search_image(file: UploadFile = File(...)):
-    contents = await file.read()
-    # decode to numpy
-    nparr = np.frombuffer(contents, np.uint8)
+    # Step 1 — read file
+    img_bytes = await file.read()
+
+    # Step 2 — decode image
+    nparr = np.frombuffer(img_bytes, np.uint8)
     img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img_bgr is None:
-        raise HTTPException(status_code=400, detail="Invalid image")
+        raise HTTPException(status_code=400, detail="Invalid image file")
 
-    # Detect faces
-    dets = detect_faces(img_bgr)
-    if not dets:
-        raise HTTPException(status_code=404, detail="No face found")
-
-    # Use largest detection
-    best = max(dets, key=lambda d: d["box"][2] * d["box"][3])
-    x, y, w, h = best["box"]
-    x, y = max(0, x), max(0, y)
-    face = img_bgr[y:y+h, x:x+w]
-
-    # Compute embedding
-    embedding = extract_embedding(face)
+    # Step 3 — embedding cache
+    embedding = get_cached_embedding(img_bytes)
     if embedding is None:
-        raise HTTPException(status_code=500, detail="No face detected")
+        embedding = extract_embedding(img_bgr)
+        if embedding is None:
+            raise HTTPException(status_code=400, detail="No face detected")
+        set_cached_embedding(img_bytes, embedding)
 
-    # Query Qdrant (filter only verified entries)
+    # Step 4 — search cache
+    cached = get_cached_search(embedding)
+    if cached:
+        return SearchResponse(matches=cached)
+
+    # Step 5 — query Qdrant
     hits = search_vectors(embedding, top_k=TOP_K, filter_payload={"verified": True})
+    print("DEBUG HIT SAMPLE:", hits[0].__dict__)
+    if not hits:
+        return SearchResponse(matches=[])
 
-    results = []
+    # Step 6 — join with Postgres metadata
+    matches = []
     async with AsyncSessionLocal() as session:
         for h in hits:
-            # h.id is person_id if inserted like that
-            person_id = h.id
-            # convert distance -> similarity (for cosine distance: similarity = 1 - distance)
-            # Qdrant returns distance depending on metric; we assume cosine
-            dist = h.score
-            similarity = 1.0 - dist
-            if similarity < SIMILARITY_THRESHOLD:
-                continue
-            # fetch metadata
-            stmt = select(Person).where(Person.id == person_id)
-            row = await session.execute(stmt)
-            person = row.scalar_one_or_none()
-            if not person:
-                continue
-            results.append({
-                "person_id": str(person.id),
-                "similarity": float(similarity),
-                "image_url": person.image_url,
-                "name": person.name,
-                "age": person.age,
-                "last_seen_location": person.last_seen_location,
-                "case_id": person.case_id
-            })
+            print("PAYLOAD:", h.payload)
+            pid = (
+                    h.payload.get("person_id") 
+                    or h.payload.get("id") 
+                    or h.payload.get("personId")
+                )
 
-    return {"matches": results}
+            if not pid:
+                print("⚠ Skipping hit — no person_id in payload:", h.payload)
+                continue
+
+            # try metadata cache
+            metadata = get_person_metadata(pid)
+            if metadata is None:
+                # fetch from Postgres
+                stmt = select(Person).where(Person.id == pid)
+                res = await session.execute(stmt)
+                p = res.scalar_one_or_none()
+                if not p:
+                    continue
+
+                metadata = {
+                    "person_id": pid,
+                    "name": p.name,
+                    "age": p.age,
+                    "image_url": p.image_url,
+                    "last_seen_location": p.last_seen_location,
+                    "case_id": p.case_id,
+                }
+                cache_person_metadata(pid, metadata)
+
+            similarity =  h.score  # Qdrant returns distance, convert to similarity
+            print("RAW QDRANT SCORE:", h.score)
+            print("CONVERTED SIMILARITY:", similarity)
+            if similarity >= SIMILARITY_THRESHOLD:
+                matches.append(
+                    MatchItem(
+                        person_id=metadata["person_id"],
+                        similarity=float(similarity),
+                        image_url=metadata["image_url"],
+                        name=metadata.get("name"),
+                        age=metadata.get("age"),
+                        last_seen_location=metadata.get("last_seen_location"),
+                        case_id=metadata.get("case_id"),
+                    )
+                )
+
+    # Step 7 — cache results
+    results_payload = [m.dict() for m in matches]
+    set_cached_search(embedding, results_payload)
+
+    return SearchResponse(matches=matches)
