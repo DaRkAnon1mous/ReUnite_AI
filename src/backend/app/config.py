@@ -12,7 +12,7 @@ QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "admin-token")
-SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.55"))  # 0..1
+SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.3"))  # 0..1
 TOP_K = int(os.getenv("TOP_K", "5"))
 
 # Model paths (relative to project root)
