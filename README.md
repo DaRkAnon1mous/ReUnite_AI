@@ -1,6 +1,4 @@
 
-
-```markdown
 # ReUnite AI – Missing Person Identification System  
 Reunite people. Rebuild families. Powered by AI.
 
