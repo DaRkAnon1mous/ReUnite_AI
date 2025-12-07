@@ -12,9 +12,8 @@ fastapi
 uvicorn 
 python-multipart
 pydantic 
-mtcnn
 Pillow
 python-jose[cryptography] 
 requests 
 aiohttp
-tensorflow_cpu==2.20.0
+redis
