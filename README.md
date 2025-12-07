@@ -221,8 +221,8 @@ npm run dev
 
 ## 🛰 Deployment Links
 
-* **Frontend (Netlify):** [https://your-netlify-deployment](https://your-netlify-deployment)
-* **Backend (HuggingFace):** [https://huggingface.co/spaces/DaRkAnon1mous/ReUnite_AI](https://huggingface.co/spaces/DaRkAnon1mous/ReUnite_AI)
+* **Frontend (Netlify):** https://reuniteai.netlify.app/
+* **Backend (HuggingFace):** https://darkanon1mous-reunite-ai.hf.space/
 
 ---
 
