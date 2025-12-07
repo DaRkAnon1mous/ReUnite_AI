@@ -2,7 +2,6 @@ sqlalchemy
 python-dotenv
 asyncpg
 cloudinary
-insightface 
 onnxruntime 
 opencv-python-headless 
 numpy
