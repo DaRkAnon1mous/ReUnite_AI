@@ -27,6 +27,7 @@ export default function SearchPage() {
       const res = await api.post("/search", form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      console.log("SEARCH RESPONSE RAW:", res.data);
 
       setResults(res.data.matches || []);
     } catch (err) {
